@@ -1,0 +1,42 @@
+# ---------------------------------------------------------------------------------------
+# One place for every knob. Relative paths are relative to this project folder.
+# ---------------------------------------------------------------------------------------
+paths:
+  raw_dir: data/raw              # step1 downloads the 10 CSVs here
+  processed_dir: data/processed  # step2 writes per-window state vectors here
+  runs_dir: runs                 # step3 writes checkpoints / logs here
+
+features:
+  window_seconds: 10             # one network-state vector = flows that started in 10 s
+  max_gap_windows: 6             # silence longer than this splits a day into separate segments
+  attack_min_flows: 1            # window is "attack" if >= this many flows carry an attack label
+
+sequence:
+  context: 30                    # L = windows of history the model sees (30 x 10 s = 5 min)
+  horizon: 6                     # K = windows it forecasts (6 x 10 s = 1 min)
+
+split:
+  # Whole days are held out for testing, so the test set contains days (and attack variants)
+  # the model never saw. Days that are not downloaded/processed are skipped automatically.
+  train_days: ["2018-02-14", "2018-02-15", "2018-02-20", "2018-02-22", "2018-02-28", "2018-03-02"]
+  test_days:  ["2018-02-16", "2018-02-21", "2018-02-23", "2018-03-01"]
+  block_windows: 300             # train days are cut into blocks of 300 windows (50 min) ...
+  val_every: 5                   # ... and every 5th block is used as validation
+
+model:
+  arch: gru                      # gru | lstm
+  hidden: 128
+  layers: 2
+  dropout: 0.15
+
+train:
+  epochs: 30
+  batch_size: 256
+  lr: 0.002
+  weight_decay: 0.0001
+  warmup_mse_epochs: 2           # first epochs: plain MSE for the state head, then Gaussian NLL
+  tf_decay_epochs: 15            # teacher-forcing probability falls 1 -> 0 over this many epochs
+  patience: 6                    # early stopping (epochs without validation improvement)
+  seed: 42
+  amp: true                      # mixed precision on the GPU
+  loss_weights: {state: 1.0, attack: 1.0, stage: 0.5}

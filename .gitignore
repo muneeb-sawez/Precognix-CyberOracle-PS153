@@ -1,0 +1,26 @@
+# downloaded/derived data - regenerate with step1/step2, don't commit
+data/raw/*.csv
+data/processed/*.parquet
+data/processed/*.json
+
+# training outputs - regenerate with step3/step4
+runs/*.pt
+runs/*.csv
+runs/*.png
+runs/*.json
+
+# keep the empty folder structure
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+!runs/.gitkeep
+
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+*.egg-info/
+
+# OS
+.DS_Store
+Thumbs.db
