@@ -91,7 +91,14 @@ def download(url: str, dest: Path, retries: int = 12) -> None:
     final = part.stat().st_size if part.exists() else 0
     if final != size:
         raise RuntimeError(f"{dest.name}: got {final} of {size} bytes - run the script again to resume")
-    part.replace(dest)
+    for r_attempt in range(10):
+        try:
+            part.replace(dest)
+            break
+        except PermissionError:
+            time.sleep(1.0)
+    else:
+        part.replace(dest)
     print(f"  done ({size / 2**20:.0f} MiB)")
 
 

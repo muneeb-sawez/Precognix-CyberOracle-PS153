@@ -15,6 +15,8 @@ compounding its own forecast error into future steps) - we do not want that here
 """
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 import torch
 
@@ -43,17 +45,18 @@ def integrated_gradients(model, ctx: torch.Tensor, K: int, steps: int = 32,
     ctx: (B, L, D) standardised context, on the model's device. Returns (B, L, D) numpy array;
     attributions[b].sum() approximately equals the target score for sample b (completeness).
     """
-    model.eval()
     was_training = model.training
+    model.eval()
     baseline = torch.zeros_like(ctx)
     total_grad = torch.zeros_like(ctx)
     alphas = torch.linspace(0.0, 1.0, steps, device=ctx.device)
-    for a in alphas:
-        x = (baseline + a * (ctx - baseline)).clone().requires_grad_(True)
-        att, stage = _rollout_for_grad(model, x, K)
-        score = att.amax(dim=1).sum() if target == "attack" else stage.amax(dim=(1, 2)).sum()
-        grad, = torch.autograd.grad(score, x)
-        total_grad = total_grad + grad
+    with torch.backends.cudnn.flags(enabled=False):
+        for a in alphas:
+            x = (baseline + a * (ctx - baseline)).clone().requires_grad_(True)
+            att, stage = _rollout_for_grad(model, x, K)
+            score = att.amax(dim=1).sum() if target == "attack" else stage.amax(dim=(1, 2)).sum()
+            grad, = torch.autograd.grad(score, x)
+            total_grad = total_grad + grad
     model.train(was_training)
     avg_grad = total_grad / steps
     return ((ctx - baseline) * avg_grad).detach().cpu().numpy()
@@ -65,3 +68,31 @@ def top_features(attribution: np.ndarray, k: int = 8) -> list[tuple[str, float]]
     per_feat = attribution.sum(axis=0)
     order = np.argsort(-np.abs(per_feat))[:k]
     return [(FEATURE_NAMES[i], float(per_feat[i])) for i in order]
+
+
+def temporal_attention(attribution: np.ndarray, num_windows: int = 10) -> list[dict[str, Any]]:
+    """Derives axiomatic temporal attention distribution across historical context windows.
+    
+    attribution: (L, D) for ONE sample -> sums gradient energy across features per time window,
+    then applies softmax normalization to extract temporal importance over the last num_windows.
+    """
+    # Sum feature attribution energy per window t: (L,)
+    t_energy = np.abs(attribution).sum(axis=-1)
+    L = len(t_energy)
+    k = min(num_windows, L)
+    recent = t_energy[-k:]
+
+    # Softmax normalization for attention probability distribution
+    shift = recent - np.max(recent) if np.max(recent) > 0 else recent
+    exp_w = np.exp(np.clip(shift, -20.0, 0.0))
+    weights = exp_w / np.maximum(np.sum(exp_w), 1e-8)
+
+    return [
+        {
+            "window": f"W(t-{k - 1 - i})",
+            "weight": round(float(w), 4),
+            "label": f"T-{k - 1 - i}"
+        }
+        for i, w in enumerate(weights)
+    ]
+

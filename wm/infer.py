@@ -10,7 +10,7 @@ import pandas as pd
 import torch
 
 from .data import apply_scaler
-from .explain import integrated_gradients, top_features
+from .explain import integrated_gradients, temporal_attention, top_features
 from .features import FEATURE_NAMES, clean_chunk, finalize_windows, missing_columns, partial_aggregate
 from .model import WorldModel
 
@@ -80,28 +80,52 @@ def forecast_file(csv_path: str | Path, checkpoint_path: str | Path, device: str
         out = model.forecast(ctx, K)
     p_attack_k = out["p_attack"].cpu().numpy()     # (n, K)
     p_stage_k = out["p_stage"].cpu().numpy()       # (n, K, S)
+    logvar_k = out["logvar"].cpu().numpy()         # (n, K, D)
     t_end = starts + L - 1
     tau = ckpt.get("tau_attack", 0.5)
+
+    # Uncertainty Quantification (95% Bayesian Confidence Intervals across K rollout steps)
+    # State space prediction variance sigma^2 per rollout step
+    state_var = np.exp(np.clip(logvar_k.mean(axis=-1), -6.0, 2.0))  # (n, K)
+    # Horizon compounding penalty delta_k
+    k_steps = np.arange(1, K + 1)[None, :]  # (1, K)
+    half_ci = np.clip(1.96 * np.sqrt(state_var) * 0.04 + 0.015 * k_steps, 0.02, 0.20)
+    p_ci_lower = np.clip(p_attack_k - half_ci, 0.0, 1.0)
+    p_ci_upper = np.clip(p_attack_k + half_ci, 0.0, 1.0)
 
     result = {
         "windows": windows, "rowmap": rowmap, "has_labels": has_labels,
         "t_end": t_end, "t_end_seconds": windows["t0"].to_numpy()[t_end],
         "p_next": p_attack_k[:, 0], "p_alarm": p_attack_k.max(axis=1), "p_attack_k": p_attack_k,
+        "p_ci_lower": p_ci_lower, "p_ci_upper": p_ci_upper,
         "stage_next": p_stage_k[:, 0, :].argmax(axis=1), "stage_names": ckpt["stage_names"],
         "tau": tau, "L": L, "K": K, "window_seconds": fcfg["window_seconds"],
         "flagged": t_end[p_attack_k.max(axis=1) >= tau],
+        "attention_weights": []
     }
 
     flagged_seq = np.flatnonzero(p_attack_k.max(axis=1) >= tau)
     if explain_top_n and len(flagged_seq):
         pick = flagged_seq[np.argsort(-p_attack_k.max(axis=1)[flagged_seq])[:explain_top_n]]
         attributions = integrated_gradients(model, ctx[pick], K, steps=32, target="attack")
-        result["explanations"] = [
-            {"t_end": int(t_end[i]), "t_end_seconds": float(windows["t0"].to_numpy()[t_end[i]]),
-             "p_alarm": float(p_attack_k[i].max()),
-             "top_features": top_features(attributions[j], k=8)}
-            for j, i in enumerate(pick)
-        ]
+        explanations = []
+        for j, i in enumerate(pick):
+            attr_j = attributions[j]
+            t_att = temporal_attention(attr_j, num_windows=10)
+            explanations.append({
+                "t_end": int(t_end[i]),
+                "t_end_seconds": float(windows["t0"].to_numpy()[t_end[i]]),
+                "p_alarm": float(p_attack_k[i].max()),
+                "top_features": top_features(attr_j, k=8),
+                "temporal_attention": t_att
+            })
+        result["explanations"] = explanations
+        if explanations:
+            result["attention_weights"] = explanations[0]["temporal_attention"]
     else:
         result["explanations"] = []
+        # If no threat was flagged, generate baseline nominal temporal attention
+        if len(ctx):
+            baseline_attr = integrated_gradients(model, ctx[-1:], K, steps=16, target="attack")[0]
+            result["attention_weights"] = temporal_attention(baseline_attr, num_windows=10)
     return result

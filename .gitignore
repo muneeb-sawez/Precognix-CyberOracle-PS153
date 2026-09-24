@@ -1,26 +1,38 @@
-# downloaded/derived data - regenerate with step1/step2, don't commit
+# Large downloaded dataset captures (6.6 GB - too large for Git; fetch via step1_download.py)
 data/raw/*.csv
 data/processed/*.parquet
 data/processed/*.json
 
-# training outputs - regenerate with step3/step4
-runs/*.pt
-runs/*.csv
-runs/*.png
-runs/*.json
-
-# keep the empty folder structure
-!data/raw/.gitkeep
-!data/processed/.gitkeep
+# Keep runs structure and TRACK the trained World Model checkpoint + evaluation artifacts
+runs/*
 !runs/.gitkeep
+!runs/wm_best.pt
+!runs/eval_report.json
+!runs/*.png
+!runs/*.csv
+!runs/*.joblib
 
-# Python
+# Standalone offline validation flow trace (4 MB - needed for instant jury evaluation)
+!demo_sample.csv
+
+# Frontend dependencies and production build outputs
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+node_modules/
+dist/
+.vite/
+
+# Python Virtual Environments & Bytecode
 __pycache__/
 *.pyc
+*.pyo
 venv/
 .venv/
 *.egg-info/
 
-# OS
+# Operating System & Runtime logs
 .DS_Store
 Thumbs.db
+*.log
+temp_*

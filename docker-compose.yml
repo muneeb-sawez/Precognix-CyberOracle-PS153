@@ -1,0 +1,35 @@
+services:
+  precognix-engine:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: precognix_backend_api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+      - "8501:8501"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PRECOGNIX_ENV=production
+    volumes:
+      - ./runs:/app/runs
+      - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/status"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  cyber-oracle-soc:
+    image: node:20-alpine
+    container_name: cyber_oracle_frontend
+    restart: unless-stopped
+    working_dir: /app
+    volumes:
+      - ./frontend:/app
+    ports:
+      - "5173:5173"
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+    depends_on:
+      precognix-engine:
+        condition: service_healthy

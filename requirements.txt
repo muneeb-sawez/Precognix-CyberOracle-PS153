@@ -1,5 +1,6 @@
 # Install PyTorch FIRST with the CUDA build that matches your driver (see README, step 2).
 # Then: pip install -r requirements.txt
+# Core Data Science & ML
 numpy>=1.26
 pandas>=2.1
 pyarrow>=15
@@ -9,4 +10,21 @@ pyyaml>=6
 requests>=2.31
 tqdm>=4.66
 psutil>=5.9
+joblib>=1.3
+
+# REST API & WebSockets Server
+fastapi>=0.110.0
+uvicorn[standard]>=0.28.0
+pydantic>=2.6.0
+python-multipart>=0.0.9
+websockets>=12.0
+
+# Visualization & Reporting
 streamlit>=1.38
+plotly>=5.20.0
+reportlab>=4.1.0
+
+# Optional High-Performance & Testing
+lightgbm>=4.3.0
+pytest>=8.0.0
+

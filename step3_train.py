@@ -101,7 +101,7 @@ def main() -> None:
     device = torch.device("cuda" if (args.device in ("auto", "cuda") and torch.cuda.is_available()) else "cpu")
     if args.device == "cuda" and device.type == "cpu":
         sys.exit("CUDA was requested but is not available - see step0_check_env.py")
-    print(f"device: {device}" + (f" ({torch.cuda.get_device_name(0)})" if device.type == "cuda" else " (slow!)"))
+    print(f"device: {device}" + (f" ({torch.cuda.get_device_name(0)})" if device.type == "cuda" else " (CPU execution mode)"))
 
     processed_dir = resolve(cfg["paths"]["processed_dir"])
     df = load_windows(processed_dir)
