@@ -18,7 +18,8 @@ import {
   Play
 } from 'lucide-react';
 import { cyberSound } from '../../utils/soundEffects';
-import { API_BASE } from '../../apiConfig';
+import { API_BASE, HAS_LIVE_API } from '../../apiConfig';
+import confetti from 'canvas-confetti';
 
 const POLICIES = [
   {
@@ -59,17 +60,49 @@ const POLICIES = [
   }
 ];
 
+function getFallbackRollout(policyKey) {
+  const unmitigated = [98.5, 98.8, 99.1, 98.9, 98.2, 97.4];
+  let mitigated = [92.0, 84.5, 71.0, 52.3, 31.8, 14.2];
+  let rule = "iptables -A FORWARD -d 172.31.64.0/20 -p tcp --tcp-flags SYN,ACK SYN -m limit --limit 10/s -j ACCEPT";
+
+  if (policyKey === 'quarantine_host') {
+    mitigated = [90.5, 72.1, 48.0, 24.5, 12.0, 4.8];
+    rule = "iptables -I FORWARD 1 -s 172.31.64.12 -j DROP\nip route add blackhole 172.31.64.12/32";
+  } else if (policyKey === 'bgp_scrubbing') {
+    mitigated = [94.0, 81.0, 62.0, 41.5, 22.0, 9.5];
+    rule = "vtysh -c 'router bgp 64496' -c 'network 172.31.64.0/24 route-map SCRUBBING-DIVERT'";
+  } else if (policyKey === 'scada_interlock') {
+    mitigated = [88.0, 65.0, 39.0, 18.2, 7.5, 2.1];
+    rule = "modbus-guard --strict-policy --block-fc 0x05,0x0f,0x10 --target-subnet 192.168.10.0/24";
+  }
+
+  return {
+    status: 'success',
+    policy: policyKey,
+    policy_description: 'Neural rollout simulated via on-device recurrent World Model weights.',
+    rule_generated: rule,
+    original_max_prob: 99.1,
+    mitigated_max_prob: mitigated[0],
+    risk_reduction_percent: Number((unmitigated[unmitigated.length - 1] - mitigated[mitigated.length - 1]).toFixed(1)),
+    trajectory: { unmitigated, mitigated },
+    target_ip: '172.31.64.12',
+    target_subnet: '172.31.64.0/20',
+    timestamp: new Date().toUTCString()
+  };
+}
+
 export default function MitigationCenterView({ isMitigated, onToggleMitigation, currentData }) {
   const [selectedPolicy, setSelectedPolicy] = useState('rate_limit_syn');
   const [isSimulating, setIsSimulating] = useState(false);
-  const [simulationResult, setSimulationResult] = useState(null);
+  const [simulationResult, setSimulationResult] = useState(() => getFallbackRollout('rate_limit_syn'));
   const [copiedScript, setCopiedScript] = useState(false);
+  const [deployedToast, setDeployedToast] = useState(null);
 
   const [rules, setRules] = useState([
     { id: 'RULE-901', action: 'DROP', srcIp: '198.51.100.44', dstPort: '80, 443', protocol: 'TCP SYN', hits: 14209, status: 'ENFORCED' },
     { id: 'RULE-902', action: 'RATE-LIMIT', srcIp: '192.168.1.0/24', dstPort: 'ANY', protocol: 'ICMP', hits: 821, status: 'ENFORCED' },
     { id: 'RULE-903', action: 'CHALLENGE', srcIp: '203.0.113.89', dstPort: '22 (SSH)', protocol: 'TCP', hits: 304, status: 'ENFORCED' },
-    { id: 'RULE-904', action: 'ISOLATE', srcIp: '10.0.4.15', dstPort: 'INTERNAL', protocol: 'ALL', hits: 12, status: isMitigated ? 'ACTIVE' : 'STANDBY' },
+    { id: 'RULE-904', action: 'ISOLATE', srcIp: '10.0.4.15', dstPort: 'INTERNAL', protocol: 'ALL', hits: 12, status: 'STANDBY' },
   ]);
 
   // Run simulation on mount or policy change
@@ -78,6 +111,10 @@ export default function MitigationCenterView({ isMitigated, onToggleMitigation, 
   }, [selectedPolicy]);
 
   const runCountermeasureSimulation = async (policyKey) => {
+    if (!HAS_LIVE_API || !API_BASE) {
+      setSimulationResult(getFallbackRollout(policyKey));
+      return;
+    }
     setIsSimulating(true);
     try {
       const res = await fetch(`${API_BASE}/api/simulate/countermeasure`, {
@@ -89,45 +126,13 @@ export default function MitigationCenterView({ isMitigated, onToggleMitigation, 
         const data = await res.json();
         setSimulationResult(data);
       } else {
-        // High-fidelity fallback rollout if backend port unavailable
-        generateLocalFallbackRollout(policyKey);
+        setSimulationResult(getFallbackRollout(policyKey));
       }
     } catch (e) {
-      generateLocalFallbackRollout(policyKey);
+      setSimulationResult(getFallbackRollout(policyKey));
     } finally {
       setIsSimulating(false);
     }
-  };
-
-  const generateLocalFallbackRollout = (policyKey) => {
-    const unmitigated = [98.5, 98.8, 99.1, 98.9, 98.2, 97.4];
-    let mitigated = [92.0, 84.5, 71.0, 52.3, 31.8, 14.2];
-    let rule = "iptables -A FORWARD -d 172.31.64.0/20 -p tcp --tcp-flags SYN,ACK SYN -m limit --limit 10/s -j ACCEPT";
-
-    if (policyKey === 'quarantine_host') {
-      mitigated = [90.5, 72.1, 48.0, 24.5, 12.0, 4.8];
-      rule = "iptables -I FORWARD 1 -s 172.31.64.12 -j DROP\nip route add blackhole 172.31.64.12/32";
-    } else if (policyKey === 'bgp_scrubbing') {
-      mitigated = [94.0, 81.0, 62.0, 41.5, 22.0, 9.5];
-      rule = "vtysh -c 'router bgp 64496' -c 'network 172.31.64.0/24 route-map SCRUBBING-DIVERT'";
-    } else if (policyKey === 'scada_interlock') {
-      mitigated = [88.0, 65.0, 39.0, 18.2, 7.5, 2.1];
-      rule = "modbus-guard --strict-policy --block-fc 0x05,0x0f,0x10 --target-subnet 192.168.10.0/24";
-    }
-
-    setSimulationResult({
-      status: 'success',
-      policy: policyKey,
-      policy_description: 'Neural rollout simulated via on-device recurrent World Model weights.',
-      rule_generated: rule,
-      original_max_prob: 99.1,
-      mitigated_max_prob: mitigated[0],
-      risk_reduction_percent: Number((unmitigated[unmitigated.length - 1] - mitigated[mitigated.length - 1]).toFixed(1)),
-      trajectory: { unmitigated, mitigated },
-      target_ip: '172.31.64.12',
-      target_subnet: '172.31.64.0/20',
-      timestamp: new Date().toUTCString()
-    });
   };
 
   const handleCopyScript = () => {
@@ -139,7 +144,7 @@ export default function MitigationCenterView({ isMitigated, onToggleMitigation, 
   };
 
   const handleDeployToActiveACL = () => {
-    cyberSound.playClick();
+    cyberSound.playMitigate();
     if (!simulationResult) return;
     const newRule = {
       id: `SOAR-${Math.floor(100 + Math.random() * 900)}`,
@@ -150,7 +155,15 @@ export default function MitigationCenterView({ isMitigated, onToggleMitigation, 
       hits: 1,
       status: 'ENFORCED'
     };
-    setRules([newRule, ...rules]);
+    setRules(prev => [newRule, ...prev]);
+    setDeployedToast(`Rule ${newRule.id} [${newRule.action}] deployed to active perimeter ACL!`);
+    confetti({
+      particleCount: 50,
+      spread: 60,
+      origin: { y: 0.7 },
+      colors: ['#00F0FF', '#10B981', '#38BDF8']
+    });
+    setTimeout(() => setDeployedToast(null), 3500);
   };
 
   const handleMitigationEngagement = () => {
@@ -499,6 +512,17 @@ export default function MitigationCenterView({ isMitigated, onToggleMitigation, 
           </button>
         </div>
 
+        {/* Real-time SOAR Deployment Toast Alert */}
+        {deployedToast && (
+          <div className="p-3 rounded-xl bg-emerald-950/80 light:bg-emerald-100 border border-emerald-500/50 text-emerald-300 light:text-emerald-900 text-xs font-mono flex items-center justify-between animate-fadeIn">
+            <span className="flex items-center gap-2">
+              <Zap className="w-4 h-4 text-emerald-400 fill-current animate-pulse" />
+              <strong>SOAR ENFORCED:</strong> {deployedToast}
+            </span>
+            <span className="text-[10px] text-emerald-400 font-bold uppercase">Active at Boundary Gateways</span>
+          </div>
+        )}
+
         {/* Rules Table */}
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
@@ -531,10 +555,19 @@ export default function MitigationCenterView({ isMitigated, onToggleMitigation, 
                   <td className="py-3 px-3 text-slate-400 light:text-slate-600">{r.protocol}</td>
                   <td className="py-3 px-3 font-semibold text-emerald-400 light:text-emerald-600">{r.hits.toLocaleString()}</td>
                   <td className="py-3 px-3">
-                    <span className="flex items-center gap-1.5 text-emerald-400 light:text-emerald-600 text-[11px]">
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      {r.status}
-                    </span>
+                    {r.id === 'RULE-904' ? (
+                      <span className={`flex items-center gap-1.5 text-[11px] font-bold ${
+                        isMitigated ? 'text-emerald-400 light:text-emerald-700' : 'text-slate-400 light:text-slate-500'
+                      }`}>
+                        <CheckCircle2 className={`w-3.5 h-3.5 ${isMitigated ? 'text-emerald-400 animate-pulse' : ''}`} />
+                        {isMitigated ? 'ACTIVE - CONTAINED' : 'STANDBY'}
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1.5 text-emerald-400 light:text-emerald-600 text-[11px]">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        {r.status}
+                      </span>
+                    )}
                   </td>
                 </tr>
               ))}

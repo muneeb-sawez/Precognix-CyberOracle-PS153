@@ -2,7 +2,7 @@ import React from 'react';
 import { ShieldCheck, ShieldAlert, RefreshCw } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { cyberSound } from '../utils/soundEffects';
-import { API_BASE } from '../apiConfig';
+import { API_BASE, HAS_LIVE_API } from '../apiConfig';
 
 export default function MitigationControl({
   isMitigated,
@@ -12,20 +12,22 @@ export default function MitigationControl({
   const handleToggle = () => {
     if (!isMitigated) {
       cyberSound.playMitigate();
-      // Send active defense countermeasure request to Precognix World Model API
-      fetch(`${API_BASE}/api/mitigate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'isolate_subnet',
-          target_ip: '18.219.211.138',
-          port: 21,
-          protocol: 'TCP',
-          reason: 'Pre-emptive threat threshold exceeded on World Model rollout'
-        })
-      }).then(r => r.json()).then(data => {
-        console.log('⚡ CyberOracle Active Defense Enforced:', data);
-      }).catch(err => console.warn('Mitigation API offline:', err));
+      // Send active defense countermeasure request if live backend is attached
+      if (HAS_LIVE_API && API_BASE) {
+        fetch(`${API_BASE}/api/mitigate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'isolate_subnet',
+            target_ip: '18.219.211.138',
+            port: 21,
+            protocol: 'TCP',
+            reason: 'Pre-emptive threat threshold exceeded on World Model rollout'
+          })
+        }).then(r => r.json()).then(data => {
+          console.log('⚡ CyberOracle Active Defense Enforced:', data);
+        }).catch(err => console.warn('Mitigation API offline:', err));
+      }
 
       // Trigger festive security confetti celebration!
       confetti({
@@ -67,7 +69,7 @@ export default function MitigationControl({
               </h3>
               <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full border ${
                 isMitigated 
-                  ? "bg-emerald-500/20 light:bg-emerald-100 text-emerald-300 light:text-emerald-800 border-emerald-500/40 light:border-emerald-300" 
+                  ? "bg-emerald-500/20 light:bg-emerald-100 text-emerald-300 light:text-emerald-800 border-emerald-500/40 light:border-emerald-300 font-bold" 
                   : "bg-slate-800 light:bg-slate-200 text-slate-400 light:text-slate-700 border-slate-700 light:border-slate-300"
               }`}>
                 {isMitigated ? "ACTIVE - CONTAINED" : "READY"}
@@ -95,6 +97,22 @@ export default function MitigationControl({
         </button>
 
       </div>
+
+      {/* Real-time SOAR Enforced Banner */}
+      {isMitigated && (
+        <div className="mt-3 pt-2.5 border-t border-emerald-500/20 flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono text-emerald-300">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping shrink-0" />
+            <span className="font-bold">SOAR Active Rule:</span>
+            <code className="px-2 py-0.5 rounded bg-emerald-950/80 border border-emerald-500/40 text-emerald-300">
+              iptables -I INPUT -s 18.219.211.138 -p tcp --dport 21 -j DROP
+            </code>
+          </div>
+          <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px]">
+            Auto-TTL: 900s
+          </span>
+        </div>
+      )}
     </div>
   );
 }
