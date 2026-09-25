@@ -13,6 +13,7 @@ import {
   Share2
 } from 'lucide-react';
 import { cyberSound } from '../../utils/soundEffects';
+import { API_BASE } from '../../apiConfig';
 
 export default function ForensicExportView({ currentData, scenarioConfig, isMitigated }) {
   const [copiedHash, setCopiedHash] = useState(false);
@@ -51,7 +52,7 @@ export default function ForensicExportView({ currentData, scenarioConfig, isMiti
         top_features: currentData.shapFeatures
       };
       
-      const res = await fetch('http://localhost:8000/api/incident/dossier/pdf', {
+      const res = await fetch(`${API_BASE}/api/incident/dossier/pdf`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -92,7 +93,7 @@ export default function ForensicExportView({ currentData, scenarioConfig, isMiti
         top_features: currentData.shapFeatures
       };
 
-      const res = await fetch('http://localhost:8000/api/incident/dossier/stix', {
+      const res = await fetch(`${API_BASE}/api/incident/dossier/stix`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)

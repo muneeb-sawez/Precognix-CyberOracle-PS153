@@ -2,6 +2,7 @@ import React from 'react';
 import { ShieldCheck, ShieldAlert, RefreshCw } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { cyberSound } from '../utils/soundEffects';
+import { API_BASE } from '../apiConfig';
 
 export default function MitigationControl({
   isMitigated,
@@ -12,7 +13,7 @@ export default function MitigationControl({
     if (!isMitigated) {
       cyberSound.playMitigate();
       // Send active defense countermeasure request to Precognix World Model API
-      fetch('http://localhost:8000/api/mitigate', {
+      fetch(`${API_BASE}/api/mitigate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

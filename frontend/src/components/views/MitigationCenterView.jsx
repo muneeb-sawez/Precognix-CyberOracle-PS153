@@ -18,6 +18,7 @@ import {
   Play
 } from 'lucide-react';
 import { cyberSound } from '../../utils/soundEffects';
+import { API_BASE } from '../../apiConfig';
 
 const POLICIES = [
   {
@@ -79,7 +80,7 @@ export default function MitigationCenterView({ isMitigated, onToggleMitigation, 
   const runCountermeasureSimulation = async (policyKey) => {
     setIsSimulating(true);
     try {
-      const res = await fetch('http://127.0.0.1:8000/api/simulate/countermeasure', {
+      const res = await fetch(`${API_BASE}/api/simulate/countermeasure`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ policy: policyKey })

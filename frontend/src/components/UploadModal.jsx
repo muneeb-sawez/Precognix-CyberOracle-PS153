@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { UploadCloud, FileCode, CheckCircle, X, Loader2, AlertCircle } from 'lucide-react';
 import { cyberSound } from '../utils/soundEffects';
+import { API_BASE } from '../apiConfig';
 
 export default function UploadModal({
   isOpen,
@@ -25,7 +26,7 @@ export default function UploadModal({
       const formData = new FormData();
       formData.append('file', file);
 
-      const response = await fetch('http://localhost:8000/api/forecast/file?explain_top_n=3', {
+      const response = await fetch(`${API_BASE}/api/forecast/file?explain_top_n=3`, {
         method: 'POST',
         body: formData
       });
@@ -64,7 +65,7 @@ export default function UploadModal({
     setParsedFile('demo_sample.csv (CSE-CIC-IDS2018 Benchmark)');
 
     try {
-      const response = await fetch('http://localhost:8000/api/forecast/sample?explain_top_n=3', {
+      const response = await fetch(`${API_BASE}/api/forecast/sample?explain_top_n=3`, {
         method: 'POST'
       });
 

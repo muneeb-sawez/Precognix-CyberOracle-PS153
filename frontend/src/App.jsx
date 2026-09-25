@@ -5,6 +5,7 @@ import Header from './components/Header';
 import Sidebar from './components/Sidebar';
 import Breadcrumbs from './components/Breadcrumbs';
 import Footer from './components/Footer';
+import { API_BASE } from './apiConfig';
 
 import HeroForecastWidget from './components/HeroForecastWidget';
 import MitreMatrix from './components/MitreMatrix';
@@ -176,7 +177,7 @@ export default function App() {
     if (isSnifferActive) {
       pollInterval = setInterval(async () => {
         try {
-          const res = await fetch('http://127.0.0.1:8000/api/sniffer/status');
+          const res = await fetch(`${API_BASE}/api/sniffer/status`);
           if (res.ok) {
             const data = await res.json();
             setSnifferStats(data);
@@ -195,7 +196,7 @@ export default function App() {
     cyberSound.playClick();
     if (!isSnifferActive) {
       try {
-        const res = await fetch('http://127.0.0.1:8000/api/sniffer/start', {
+        const res = await fetch(`${API_BASE}/api/sniffer/start`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({})
@@ -208,7 +209,7 @@ export default function App() {
       }
     } else {
       try {
-        await fetch('http://127.0.0.1:8000/api/sniffer/stop', {
+        await fetch(`${API_BASE}/api/sniffer/stop`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({})
