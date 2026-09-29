@@ -5,7 +5,6 @@ import Header from './components/Header';
 import Sidebar from './components/Sidebar';
 import Breadcrumbs from './components/Breadcrumbs';
 import Footer from './components/Footer';
-import { API_BASE } from './apiConfig';
 
 import HeroForecastWidget from './components/HeroForecastWidget';
 import MitreMatrix from './components/MitreMatrix';
@@ -171,51 +170,85 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKey);
   }, []);
 
-  // Poll Live Packet Sniffer when enabled
+  // API base for backend connection (supports local FastAPI or remote URL)
+  const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
+
+  // Poll Live Packet Sniffer when enabled (with graceful fallback for Netlify/Cloud)
   useEffect(() => {
     let pollInterval = null;
     if (isSnifferActive) {
       pollInterval = setInterval(async () => {
         try {
-          const res = await fetch(`${API_BASE}/api/sniffer/status`);
+          const res = await fetch(`${API_BASE}/api/sniffer/status`, { signal: AbortSignal.timeout(1500) });
           if (res.ok) {
             const data = await res.json();
             setSnifferStats(data);
+            return;
           }
-        } catch (err) {
-          console.warn('Sniffer poll error:', err);
+        } catch {
+          // Graceful fallback simulation for hosted cloud environments (Netlify / Vercel)
+          setSnifferStats((prev) => {
+            const currentPkts = (prev?.packets_captured || 2840) + Math.floor(Math.random() * 12 + 4);
+            const protocols = ['TCP', 'UDP', 'ICMP', 'DNS', 'TLSv1.3'];
+            const ports = [443, 80, 22, 53, 445, 8080, 3389];
+            const flags = ['[SYN]', '[SYN, ACK]', '[ACK]', '[PSH, ACK]', '[FIN, ACK]'];
+            const randomPkt = {
+              flow_id: `NETLIFY-WIRE-${Date.now().toString().slice(-4)}`,
+              time: new Date().toLocaleTimeString(),
+              proto: protocols[Math.floor(Math.random() * protocols.length)],
+              src: `192.168.10.${Math.floor(Math.random() * 254 + 1)}`,
+              port: ports[Math.floor(Math.random() * ports.length)],
+              flags: flags[Math.floor(Math.random() * flags.length)],
+              ttl: 64,
+              label: 'Cloud Demo Ingress (Passive Sim)'
+            };
+            const existingPkts = prev?.latest_packets || [];
+            return {
+              status: 'active',
+              mode: 'cloud_demo_fallback',
+              packets_captured: currentPkts,
+              ingest_rate: `${(Math.random() * 3 + 14).toFixed(1)} MB/s`,
+              latest_prediction: {
+                p_alarm: 0.12 + Math.random() * 0.08,
+                risk_tier: 'Nominal',
+                lead_time: 4.8,
+                forecast_trajectory: [0.12, 0.14, 0.13, 0.15, 0.16, 0.14]
+              },
+              latest_packets: [randomPkt, ...existingPkts.slice(0, 11)]
+            };
+          });
         }
       }, 1000);
     }
     return () => {
       if (pollInterval) clearInterval(pollInterval);
     };
-  }, [isSnifferActive]);
+  }, [isSnifferActive, API_BASE]);
 
   const handleToggleSniffer = async () => {
     cyberSound.playClick();
     if (!isSnifferActive) {
       try {
-        const res = await fetch(`${API_BASE}/api/sniffer/start`, {
+        await fetch(`${API_BASE}/api/sniffer/start`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({})
+          body: JSON.stringify({}),
+          signal: AbortSignal.timeout(1500)
         });
-        if (res.ok) {
-          setIsSnifferActive(true);
-        }
       } catch (e) {
-        console.error('Failed to start sniffer:', e);
+        console.info('Backend offline or hosted on Netlify; starting client demo mode.');
       }
+      setIsSnifferActive(true);
     } else {
       try {
         await fetch(`${API_BASE}/api/sniffer/stop`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({})
+          body: JSON.stringify({}),
+          signal: AbortSignal.timeout(1500)
         });
       } catch (e) {
-        console.error('Failed to stop sniffer:', e);
+        // ignore offline stop errors
       }
       setIsSnifferActive(false);
     }
@@ -321,7 +354,7 @@ export default function App() {
               maxSteps={scenarioConfig.maxSteps}
               ingestRate={currentData.ingestRate}
               isMitigated={isMitigated}
-              onToggleMitigation={() => setIsMitigated(!isMitigated)}
+              onToggleMitigation={(val) => setIsMitigated(typeof val === 'boolean' ? val : !isMitigated)}
               onOpenUploadModal={() => setIsUploadModalOpen(true)}
               themeId={themeId}
               themes={THEMES}
@@ -427,7 +460,7 @@ function AppRoutes({
                 />
                 <MitigationControl
                   isMitigated={isMitigated}
-                  onToggleMitigation={() => setIsMitigated(!isMitigated)}
+                  onToggleMitigation={(val) => setIsMitigated(typeof val === 'boolean' ? val : !isMitigated)}
                   riskTier={currentData.riskTier}
                 />
                 <HeroForecastWidget
@@ -512,11 +545,14 @@ function AppRoutes({
           />
 
           {/* ADDITIONAL SOC OPERATIONAL VIEWS */}
-          <Route path="/architecture" element={<WorldModelArchitectureView />} />
+          <Route path="/architecture" element={<WorldModelArchitectureView defaultTab="overview" />} />
+          <Route path="/system-blueprint" element={<WorldModelArchitectureView defaultTab="overview" />} />
+          <Route path="/tech-stack" element={<WorldModelArchitectureView defaultTab="stack" />} />
+          <Route path="/pipeline" element={<WorldModelArchitectureView defaultTab="pipeline" />} />
           <Route path="/benchmarks" element={<BenchmarksEvaluationView />} />
           <Route path="/critical-sectors" element={<NciipcCriticalSectorsView />} />
           <Route path="/mitigation" element={
-            <MitigationCenterView isMitigated={isMitigated} onToggleMitigation={() => setIsMitigated(!isMitigated)} currentData={currentData} />
+            <MitigationCenterView isMitigated={isMitigated} onToggleMitigation={(val) => setIsMitigated(typeof val === 'boolean' ? val : !isMitigated)} currentData={currentData} />
           } />
           <Route path="/forensics" element={
             <ForensicExportView currentData={currentData} scenarioConfig={scenarioConfig} isMitigated={isMitigated} />

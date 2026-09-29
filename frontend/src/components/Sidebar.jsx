@@ -38,7 +38,7 @@ export default function Sidebar({
     { to: "/topology", label: "Network Topology", icon: Network, color: "cyan" },
     { to: "/telemetry-stream", label: "Telemetry Stream", icon: Terminal, badge: "WIRE", color: "emerald" },
     { to: "/mitre-matrix", label: "MITRE ATT&CK (v19)", icon: Crosshair, badge: "v19", color: "rose" },
-    { to: "/architecture", label: "World Model", icon: Brain, color: "indigo" },
+    { to: "/architecture", label: "Architecture & Stack", icon: Cpu, badge: "SPEC", color: "indigo" },
     { to: "/benchmarks", label: "Benchmarks", icon: Award, badge: "EVAL", color: "amber" },
     { to: "/critical-sectors", label: "NCIIPC Sectors", icon: Building2, color: "purple" },
     { to: "/mitigation", label: "SOAR Defense", icon: ShieldCheck, badge: isMitigated ? "ON" : "OFF", color: "emerald" },

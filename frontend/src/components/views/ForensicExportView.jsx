@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { 
   FileText, 
   Download, 
@@ -21,7 +21,7 @@ export default function ForensicExportView({ currentData, scenarioConfig, isMiti
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [isGeneratingStix, setIsGeneratingStix] = useState(false);
   const sha256ModelChecksum = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
-  const now = new Date().toISOString();
+  const now = useMemo(() => new Date().toISOString(), []);
 
   const handleCopyHash = () => {
     cyberSound.playClick();
